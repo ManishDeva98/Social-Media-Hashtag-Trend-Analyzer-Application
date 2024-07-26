@@ -1,55 +1,74 @@
 import streamlit as st
 import boto3
-import requests
+import uuid
 import json
 import time
+from boto3.dynamodb.conditions import Attr
+import requests
 
-# Streamlit application to compose and publish posts
-st.title('Compose a Post')
+# Set up Boto3 client for Lambda
 
-post_content = st.text_area("Write your post here...")
-hashtags = st.text_input("Add hashtags (comma-separated)")
 
-if st.button('Publish'):
-    hashtags_list = hashtags.split(',')
-    data = {
-        'post_content': post_content,
-        'hashtags': hashtags_list
+# Function to invoke Lambda
+def post_to_lambda(post_content, hashtags):
+    session = boto3.Session(
+        aws_access_key_id='AKIA***********S',
+        aws_secret_access_key='Hi5K*******************8kEK78xU',
+        region_name='eu-north-1'
+    )
+    lambda_client = session.client('lambda')
+    post_id = str(uuid.uuid4())
+    payload = {
+        'post_id': post_id,
+        'content': post_content,
+        'hashtags': hashtags
     }
-    
-    response = requests.post('YOUR_AWS_LAMBDA_ENDPOINT', json=data)
-    
-    if response.status_code == 200:
-        st.success('Post published successfully!')
-    else:
-        st.error('Failed to publish post.')
+    response = lambda_client.invoke(
+        FunctionName='HashtagTrend',
+        InvocationType='RequestResponse',
+        Payload=json.dumps(payload)
+    )
+    return json.loads(response['Payload'].read())
 
-# Display trending hashtags
-st.title('Trending Hashtags')
-
-dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table('Posts')
-
+# Function to get trending hashtags
 def get_trending_hashtags():
+    session = boto3.Session(
+        aws_access_key_id='AKIA**************S',
+        aws_secret_access_key='Hi5K**********************8kEK78xU',
+        region_name='eu-north-1'
+    )
+    dynamodb = session.resource('dynamodb')
+    table = dynamodb.Table('Posts')
+    
     response = table.scan()
     items = response['Items']
-    hashtags_count = {}
     
+    hashtag_count = {}
     for item in items:
-        for hashtag in item['hashtags']:
-            if hashtag in hashtags_count:
-                hashtags_count[hashtag] += 1
+        hashtags = item.get('hashtags', [])
+        for hashtag in hashtags:
+            if hashtag in hashtag_count:
+                hashtag_count[hashtag] += 1
             else:
-                hashtags_count[hashtag] = 1
+                hashtag_count[hashtag] = 1
+                
+    sorted_hashtags = sorted(hashtag_count.items(), key=lambda x: x[1], reverse=True)
+    trending_hashtags = [hashtag for hashtag, count in sorted_hashtags[:5]]
     
-    sorted_hashtags = sorted(hashtags_count.items(), key=lambda x: x[1], reverse=True)
-    return sorted_hashtags[:10]
+    return trending_hashtags
 
-while True:
-    trending_hashtags = get_trending_hashtags()
-    
-    for hashtag, count in trending_hashtags:
-        st.write(f"{hashtag}: {count} mentions")
-    
-    time.sleep(60)  # Refresh every 60 seconds
-    st.experimental_rerun()
+# Streamlit UI
+st.title('Compose and Publish Post')
+post_content = st.text_area('Post Content')
+hashtags = st.text_input('Hashtags (comma-separated)')
+
+if st.button('Publish'):
+    hashtags_list = [tag.strip() for tag in hashtags.split(',')]
+    response = post_to_lambda(post_content, hashtags_list)
+    st.success('Post published successfully!')
+
+st.header('Trending Hashtags')
+trending_hashtags = get_trending_hashtags()
+st.write(trending_hashtags)
+
+
