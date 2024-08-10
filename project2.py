@@ -12,8 +12,8 @@ import requests
 # Function to invoke Lambda
 def post_to_lambda(post_content, hashtags):
     session = boto3.Session(
-        aws_access_key_id='AKIA***********S',
-        aws_secret_access_key='Hi5K*******************8kEK78xU',
+        aws_access_key_id='*******************',
+        aws_secret_access_key='******************',
         region_name='eu-north-1'
     )
     lambda_client = session.client('lambda')
@@ -24,28 +24,30 @@ def post_to_lambda(post_content, hashtags):
         'hashtags': hashtags
     }
     response = lambda_client.invoke(
-        FunctionName='HashtagTrend',
+        FunctionName='testhashtag',
         InvocationType='RequestResponse',
         Payload=json.dumps(payload)
     )
-    return json.loads(response['Payload'].read())
+    response_payload = response['Payload'].read().decode('utf-8')
+    return response_payload
 
 # Function to get trending hashtags
 def get_trending_hashtags():
     session = boto3.Session(
-        aws_access_key_id='AKIA**************S',
-        aws_secret_access_key='Hi5K**********************8kEK78xU',
+        aws_access_key_id='*************************',
+        aws_secret_access_key='**************************',
         region_name='eu-north-1'
     )
     dynamodb = session.resource('dynamodb')
-    table = dynamodb.Table('Posts')
+    table = dynamodb.Table('Posts1')
     
     response = table.scan()
     items = response['Items']
-    
+    #st.write(items)
     hashtag_count = {}
     for item in items:
-        hashtags = item.get('hashtags', [])
+        hashtags = item.get('Hashtags',[])
+        #st.write(hashtags)
         for hashtag in hashtags:
             if hashtag in hashtag_count:
                 hashtag_count[hashtag] += 1
@@ -54,7 +56,6 @@ def get_trending_hashtags():
                 
     sorted_hashtags = sorted(hashtag_count.items(), key=lambda x: x[1], reverse=True)
     trending_hashtags = [hashtag for hashtag, count in sorted_hashtags[:5]]
-    
     return trending_hashtags
 
 # Streamlit UI
